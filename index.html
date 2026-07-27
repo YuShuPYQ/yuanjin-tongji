@@ -695,14 +695,9 @@ function sortBySpan(a,b) {
 
 // Get the effective date range of a task for overlap checking
 function getEffectiveRange(task) {
-  if (task.continuous === true) {
-    // Continuous: full range
-    return { start: parseDate(task.startDate), end: parseDate(task.endDate) };
-  } else {
-    // Non-continuous: only the deadline (endDate)
-    const d = parseDate(task.endDate);
-    return { start: d, end: d };
-  }
+  // Always use the full date range for period overlap.
+  // Per-day occurrence filtering is handled by taskCoversDate / isOriginalOccurrence.
+  return { start: parseDate(task.startDate), end: parseDate(task.endDate) };
 }
 
 function addDaysToStr(dateStr, days) {
