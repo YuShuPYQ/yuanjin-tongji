@@ -744,6 +744,27 @@ function getTasksForDate(dateStr) {
   return getActiveTasks().filter(t => taskCoversDate(t, dateStr));
 }
 
+// Check if a task has any occurrence in a given year.
+// Used by year-view calendar cells to avoid marking years with zero occurrences.
+function taskCoversYear(task, year) {
+  const start = parseDate(task.startDate);
+  const end = parseDate(task.endDate);
+  const yStart = new Date(year, 0, 1);
+  const yEnd = new Date(year, 11, 31);
+
+  if (task.continuous === true) {
+    const interval = getRepeatInterval(task);
+    const minDay = Math.max(0, daysBetween(start, yStart));
+    const maxDay = Math.min(daysBetween(start, end), daysBetween(start, yEnd));
+    if (minDay > maxDay) return false;
+    const firstK = Math.ceil(minDay / interval);
+    return firstK * interval <= maxDay;
+  }
+  // Non-continuous: only the end date matters
+  const endYear = end.getFullYear();
+  return endYear === year;
+}
+
 // Get tasks for a date using current view's hierarchy rule.
 // Used by month/week calendar cells so the numbers match the visible list.
 function getTasksForDateInCurrentView(dateStr) {
@@ -1055,8 +1076,7 @@ function renderYearCalendar(d) {
     const yearStart = new Date(year, 0, 1);
     const yearEnd = new Date(year, 11, 31);
     const tasksInYear = getActiveTasks().filter(t => {
-      const range = getEffectiveRange(t);
-      return range.start <= yearEnd && range.end >= yearStart && taskVisibleInCurrentViewHierarchy(t);
+      return taskCoversYear(t, year) && taskVisibleInCurrentViewHierarchy(t);
     });
     const cats = [...new Set(tasksInYear.map(t => getOriginalCategory(t)))].slice(0, 4);
     const dots = cats.map(c => `<span class="month-dot-item dot-${c}"></span>`).join('');
@@ -1631,7 +1651,17 @@ init();
 // Register service worker for mobile PWA install/offline support
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(err => console.warn('Service worker registration failed:', err));
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            window.location.reload();
+          }
+        });
+      });
+    }).catch(err => console.warn('Service worker registration failed:', err));
   });
 }
 </script>
