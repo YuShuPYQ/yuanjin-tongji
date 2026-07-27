@@ -504,6 +504,7 @@ body {
     </div>
     <div class="header-actions">
       <button class="btn btn-icon btn-ghost" id="btnSearch" title="搜索">🔍</button>
+      <button class="btn btn-icon btn-ghost" id="btnExport" title="导出备份">📥</button>
       <button class="btn btn-icon btn-ghost" id="btnStats" title="统计">📊</button>
       <button class="btn btn-primary" id="btnAdd">
         <span>+</span> 新建事项
@@ -1520,6 +1521,24 @@ function renderSearchResults() {
   }
 }
 
+// ---- Export ----
+function exportTasks() {
+  const data = JSON.stringify({
+    exportedAt: new Date().toISOString(),
+    version: 'yjtj-v3',
+    tasks: state.tasks
+  }, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `远近通记-备份-${fmtDate(new Date())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ---- Event Bindings ----
 function bindEvents() {
   document.querySelectorAll('.view-tab').forEach(tab => {
@@ -1566,6 +1585,8 @@ function bindEvents() {
     document.getElementById('statsBar').style.display=state.statsOpen?'flex':'none';
     if(state.statsOpen)updateStats();
   });
+
+  document.getElementById('btnExport').addEventListener('click', exportTasks);
 
   document.getElementById('inputStart').addEventListener('change', ()=>{updateSpanHint();updateContinuousHint();});
   document.getElementById('inputEnd').addEventListener('change', ()=>{updateSpanHint();updateContinuousHint();});

@@ -1,4 +1,4 @@
-const CACHE_NAME = "yjtj-pwa-v4";
+const CACHE_NAME = "yjtj-pwa-v5";
 const ASSETS = [
   "./",
   "./index.html",
