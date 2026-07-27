@@ -648,11 +648,25 @@ body {
 // ============================================================
 
 // ---- Constants ----
+const APP_VERSION = 11;
 const SPAN_THRESHOLDS = { year: 365, month: 30, week: 7 };
 const VIEWS = ['year', 'month', 'week', 'day'];
 const STORAGE_KEY = 'yjtj_tasks_v2';
 const YEAR_VIEW_PAST = 3;
 const YEAR_VIEW_FUTURE = 9; // past 3 + current 1 + future 9 = 13 years total
+
+// Force refresh when version changes (bypass SW cache)
+const cachedVer = parseInt(localStorage.getItem('yjtj_app_ver') || '0', 10);
+if (cachedVer !== APP_VERSION) {
+  localStorage.setItem('yjtj_app_ver', APP_VERSION);
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(r => r.unregister());
+      caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+    });
+  }
+  if (cachedVer !== 0) window.location.reload();
+}
 
 // ---- State ----
 let state = {
