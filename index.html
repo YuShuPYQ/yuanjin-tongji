@@ -827,9 +827,9 @@ function taskVisibleInCurrentViewHierarchy(task) {
   const cat = getOriginalCategory(task);
   const catIdx = viewOrder.indexOf(cat);
   if (state.currentView === 'day') return true;
-  // Week view: when showing all, include tasks from any category that
-  // appear this week (even month/year tasks with daily occurrences).
-  if (state.currentView === 'week' && state.showAll) return true;
+  // Week view showAll: include month-level tasks that have weekly occurrences,
+  // but exclude year-level (too coarse for weekly view).
+  if (state.currentView === 'week' && state.showAll) return catIdx >= 1;
   if (state.showAll) return catIdx >= viewIdx;
   return cat === state.currentView;
 }
@@ -861,18 +861,20 @@ function getViewTasks() {
   const result = [];
 
   if (view === 'day') {
-    // Day view is the execution view: show every task that appears on this date.
+    // Day view: only show tasks that actually occur on this specific date.
+    const dateStr = fmtDate(period.start);
     for (const cat of viewOrder) {
-      if (categorized[cat].length > 0) {
-        result.push({ category: cat, tasks: categorized[cat] });
+      const catTasks = categorized[cat].filter(t => taskCoversDate(t, dateStr));
+      if (catTasks.length > 0) {
+        result.push({ category: cat, tasks: catTasks });
       }
     }
   } else if (showAll) {
     // Show current view category and finer categories only.
     // year -> year/month/week/day; month -> month/week/day
-    // Week view exception: also show coarser categories (month/year) that have occurrences this week
+    // Week view: also include month-level tasks that appear this week, but not year-level.
     const viewIdx = viewOrder.indexOf(view);
-    const startIdx = view === 'week' ? 0 : viewIdx;
+    const startIdx = view === 'week' ? 1 : viewIdx;
     for (let i = startIdx; i < viewOrder.length; i++) {
       const cat = viewOrder[i];
       if (categorized[cat].length > 0) {
