@@ -306,7 +306,7 @@ body {
 .year-unit-cell { min-height:86px; padding:10px; }
 .year-unit-num { font-size:15px; font-weight:700; }
 .year-unit-label { font-size:10px; color:var(--text-tertiary); margin-top:2px; }
-.month-calendar-table { margin-bottom:16px; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; background:var(--surface); }
+.month-calendar-table { margin-bottom:16px; border:1px solid var(--border); border-radius:var(--radius); overflow-x:auto; background:var(--surface); }
 .month-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:0; background:var(--surface); }
 .week-strip { display:flex; gap:8px; overflow-x:auto; padding-bottom:8px; }
 .cal-cell {
@@ -468,7 +468,7 @@ body {
   .year-unit-label, .month-label { font-size:9px; }
   .month-dot { justify-content:center; gap:1px; margin-top:2px; }
   .month-dot-item { width:4px; height:4px; }
-  .month-day-cell { min-height:64px; }
+  .month-day-cell { min-height:56px; aspect-ratio:auto; }
   .week-strip { display:grid; grid-template-columns:repeat(7,1fr); gap:0; overflow:visible; padding-bottom:0; border:1px solid var(--border); border-radius:var(--radius); }
   .day-column { min-width:0; border-radius:0; border:0; border-right:1px solid var(--border); box-shadow:none; }
   .day-column:last-child { border-right:0; }
@@ -904,7 +904,7 @@ function addTask(task) {
   task.createdAt = Date.now();
   task.status = 'active';
   task.completedAt = null;
-  if (task.continuous === undefined) task.continuous = false;
+  task.continuous = task.continuous === true;  // Normalize to boolean
   task.repeatInterval = Math.max(1, parseInt(task.repeatInterval || 1, 10) || 1);
   task.postponedOccurrences = task.postponedOccurrences || {};
   state.tasks.unshift(task);
@@ -913,6 +913,8 @@ function addTask(task) {
 function updateTask(id, updates) {
   const idx = state.tasks.findIndex(t => t.id === id);
   if (idx === -1) return;
+  updates.continuous = updates.continuous === true;  // Normalize to boolean
+  updates.repeatInterval = Math.max(1, parseInt(updates.repeatInterval || 1, 10) || 1);
   state.tasks[idx] = { ...state.tasks[idx], ...updates };
   saveTasks();
 }
@@ -1080,10 +1082,8 @@ function renderMonthCalendar(d) {
   const leadingBlanks = startDow - 1;
   const trailingBlanks = (7 - ((leadingBlanks + totalDays) % 7)) % 7;
 
-  let html = '<div class="month-calendar-table">';
-  html += '<div class="month-grid month-header-grid">';
+  let html = '<div class="month-calendar-table"><div class="month-grid">';
   for (const dow of dowLabels) html += `<div class="cal-dow">${dow}</div>`;
-  html += '</div><div class="month-grid month-range-grid">';
 
   for (let b = 0; b < leadingBlanks; b++) {
     html += '<div class="cal-cell month-day-cell blank-cell"></div>';
@@ -1218,6 +1218,7 @@ function renderTaskCard(t) {
   const priLabel = { high:'高', medium:'中', low:'低' }[t.priority];
   const spanBadges = { year:'span-year', month:'span-month', week:'span-week', day:'span-day' };
   const isContinuous = t.continuous === true;
+  const occurrenceCount = isContinuous ? Math.ceil(spanDays / getRepeatInterval(t)) : 1;
 
   return `<div class="task-card ${isCompleted?'completed':''}" data-id="${t.id}">
     <div class="task-checkbox ${isCompleted?'done':''}"></div>
@@ -1228,7 +1229,7 @@ function renderTaskCard(t) {
         <span class="task-date">⏱ ${spanDays}天</span>
         <span class="task-priority priority-${t.priority}">${priLabel}优先级</span>
         <span class="task-span-badge ${spanBadges[originalCat]}">${getSpanLabel(originalCat)}跨度</span>
-        ${!isContinuous ? '<span class="task-span-badge" style="background:#fce7f3;color:#db2777">截止日</span>' : '<span class="task-span-badge" style="background:#e0f2fe;color:#0284c7">每' + getRepeatInterval(t) + '天</span>'}
+        ${!isContinuous ? '<span class="task-span-badge" style="background:#fce7f3;color:#db2777">截止日</span>' : '<span class="task-span-badge" style="background:#e0f2fe;color:#0284c7">每' + getRepeatInterval(t) + '天·共' + occurrenceCount + '次</span>'}
         ${displayCat !== originalCat ? `<span class="task-span-badge ${spanBadges[displayCat]}" style="opacity:.7">→${getSpanLabel(displayCat)}视图</span>` : ''}
         ${t.tags&&t.tags.length>0?t.tags.map(tag=>`<span style="font-size:10px;color:var(--text-tertiary);background:var(--surface-hover);padding:1px 6px;border-radius:4px">${escHtml(tag)}</span>`).join(''):''}
       </div>
@@ -1482,10 +1483,22 @@ function updateContinuousHint() {
     hint.innerHTML = '⚠️ 仅在 <strong>' + end + '</strong>（截止日）当天显示此事项';
     hint.style.color = 'var(--warning)';
   } else if (start !== end) {
-    hint.innerHTML = '✅ 从 ' + start + ' 开始，每隔 <strong>' + interval + ' 天</strong>出现一次，直到 ' + end;
+    const startD = parseDate(start);
+    const endD = parseDate(end);
+    const totalDays = daysBetween(startD, endD) + 1;
+    const count = Math.ceil(totalDays / interval);
+    const sampleDates = [];
+    for (let i = 0; i < Math.min(count, 3); i++) {
+      const d = new Date(startD);
+      d.setDate(d.getDate() + i * interval);
+      sampleDates.push((d.getMonth() + 1) + '/' + d.getDate());
+    }
+    const dots = count > 3 ? '...' : '';
+    hint.innerHTML = '✅ 每隔 <strong>' + interval + ' 天</strong>出现一次，共 <strong>' + count + ' 次</strong>' 
+      + '（' + sampleDates.join(', ') + dots + '）';
     hint.style.color = 'var(--success)';
   } else {
-    hint.innerHTML = '✅ 仅在当天显示';
+    hint.innerHTML = '✅ 仅在当天显示（日期跨度太短，周期循环不会扩展 beyond 起止日期）';
     hint.style.color = 'var(--text-tertiary)';
   }
 }
