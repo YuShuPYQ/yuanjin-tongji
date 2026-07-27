@@ -527,9 +527,9 @@ body {
 
   <!-- View Tabs -->
   <div class="view-tabs">
-    <button class="view-tab active" data-view="year">📅 年视图</button>
+    <button class="view-tab" data-view="year">📅 年视图</button>
     <button class="view-tab" data-view="month">📆 月视图</button>
-    <button class="view-tab" data-view="week">📋 周视图</button>
+    <button class="view-tab active" data-view="week">📋 周视图</button>
     <button class="view-tab" data-view="day">☀️ 日视图</button>
   </div>
 
@@ -656,7 +656,7 @@ const YEAR_VIEW_FUTURE = 6; // total = past 3 + current 1 + future 6 = 10 years
 // ---- State ----
 let state = {
   tasks: [],
-  currentView: 'year',
+  currentView: 'week',
   currentDate: new Date(),
   showAll: true,
   editingTaskId: null,
