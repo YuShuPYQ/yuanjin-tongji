@@ -2,17 +2,16 @@
 """
 远近通记 - 每日提醒发送脚本
 由 GitHub Actions 每天北京时间 08:00 自动执行
-发送浏览器推送通知
+通过 Server酱 推送到微信
 """
 
 import json, os, sys, requests
 from datetime import datetime, timedelta, date
 
 # ============================================================
-# VAPID 密钥（Web Push）
+# 配置
 # ============================================================
-VAPID_PRIVATE_KEY = "dM7d45LlIjFl7TzqtxzpaQmGd6yhWToT0-9RSfU28J8"
-VAPID_SUBJECT = "mailto:yushupyq@gmail.com"
+SERVER_KEY = "SCT386301TOhwCVMnccBFYpIVPm6lN9RFs"
 TASKS_FILE = os.path.join(os.path.dirname(__file__), "..", "tasks_sync.json")
 
 # ============================================================
@@ -82,34 +81,14 @@ def get_preview_tasks(tasks, today):
     return preview
 
 # ============================================================
-# Web Push 发送
+# 通过 Server酱 发送微信消息
 # ============================================================
-def send_web_push(subscription, title, body):
-    """使用 pywebpush 发送浏览器推送通知"""
-    try:
-        from pywebpush import WebPush, WebPushException
-    except ImportError:
-        print("pywebpush 未安装，请在 requirements 中添加")
-        return False
-
-    try:
-        wp = WebPush({
-            "vapid_private_key": VAPID_PRIVATE_KEY,
-            "vapid_claims": {"sub": VAPID_SUBJECT}
-        })
-        payload = json.dumps({"title": title, "body": body})
-        wp.send(
-            json.dumps(payload).encode(),
-            subscription,
-            ttl=86400
-        )
-        print("✅ 推送通知已发送")
-        return True
-    except WebPushException as e:
-        print(f"推送失败: {e}")
-        if hasattr(e, 'response') and e.response:
-            print(f"响应: {e.response.status_code} {e.response.text}")
-        return False
+def send_server_chan(title, desp):
+    url = f"https://sctapi.ftqq.com/{SERVER_KEY}.send"
+    resp = requests.post(url, data={"title": title, "desp": desp}, timeout=15)
+    result = resp.json()
+    print(f"Server酱返回: {result}")
+    return result.get("code") == 0
 
 # ============================================================
 # 主流程
@@ -119,44 +98,49 @@ def main():
 
     # 加载任务
     tasks = []
-    push_sub = None
     if os.path.exists(TASKS_FILE):
         with open(TASKS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
             tasks = data.get("tasks", [])
-            push_sub = data.get("pushSubscription")
-    print(f"加载 {len(tasks)} 条任务, push_sub={'有' if push_sub else '无'}")
+    print(f"加载 {len(tasks)} 条任务")
 
-    # 今日 + 预告
     today_tasks = get_todays_tasks(tasks, today)
     previews = get_preview_tasks(tasks, today)
 
-    print(f"今日待办: {len(today_tasks)} 项")
-    for t in today_tasks:
-        print(f"  - {t.get('title','')}")
-    print(f"预告: {len(previews)} 项")
+    print(f"今日待办: {len(today_tasks)} 项, 预告: {len(previews)} 项")
 
     if not today_tasks and not previews:
-        print("无待办，跳过发送")
+        print("无待办，跳过")
         return
 
-    # 构建通知内容
-    today_lines = [f"{i+1}. {t.get('title','')}" for i, t in enumerate(today_tasks[:8])]
-    preview_lines = [f"📢 {p['daysUntil']}天后·{p['title']}" for p in previews[:4]]
-
+    # 构建 Markdown 消息
     title = f"☀️ {today.strftime('%m月%d日')} 待办 · {len(today_tasks)}项"
-    body_parts = []
-    if today_lines:
-        body_parts.append("今日:\n" + "\n".join(today_lines))
-    if preview_lines:
-        body_parts.append("预告:\n" + "\n".join(preview_lines))
-    body = "\n\n".join(body_parts)
 
-    # 发送推送通知
-    if push_sub:
-        send_web_push(push_sub, title, body)
+    lines = []
+    if today_tasks:
+        lines.append(f"## 今日待办（{len(today_tasks)} 项）\n")
+        for i, t in enumerate(today_tasks[:10]):
+            tag = ""
+            if t.get("priority") == "high": tag = "🔴"
+            elif t.get("priority") == "low": tag = "🟢"
+            lines.append(f"{i+1}. {tag} **{t.get('title','')}**")
+
+    if previews:
+        lines.append(f"\n## 📢 即将开始\n")
+        for p in previews[:5]:
+            lines.append(f"- {p['daysUntil']}天后 · {p['title']}（{p['date'].strftime('%m/%d')}）")
+
+    lines.append(f"\n---\n📅 {today.strftime('%Y-%m-%d')} · 远近通记")
+
+    desp = "\n".join(lines)
+
+    # 发送
+    ok = send_server_chan(title, desp)
+    if ok:
+        print("✅ 微信消息已发送")
     else:
-        print("⚠️ 未找到 push subscription，无法发送推送")
+        print("❌ 发送失败")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

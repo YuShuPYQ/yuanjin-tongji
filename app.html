@@ -503,7 +503,6 @@ body {
       <span class="app-title">远近通记</span>
     </div>
     <div class="header-actions">
-      <button class="btn btn-icon btn-ghost" id="btnNotify" title="订阅通知">🔔</button>
       <button class="btn btn-icon btn-ghost" id="btnSync" title="同步到微信">📡</button>
       <button class="btn btn-icon btn-ghost" id="btnSearch" title="搜索">🔍</button>
       <button class="btn btn-icon btn-ghost" id="btnExport" title="导出备份">📥</button>
@@ -658,10 +657,12 @@ body {
         <input class="form-input" type="password" id="syncApiKey" placeholder="ghp_xxxxxxxxxxxx">
       </div>
       <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px;line-height:1.6">
-        需要一个 GitHub Fine-grained Token，权限选 <strong>Contents: Read and write</strong>。<br>
-        获取方式：<a href="https://github.com/settings/tokens?type=beta" target="_blank" style="color:var(--primary)">GitHub → Settings → Developer settings → Fine-grained tokens</a><br>
-        Repository 选 <strong>YuShuPYQ/yuanjin-tongji</strong><br><br>
-        点击"同步"会将任务数据推送到仓库，GitHub Action 每天 8:00 发送微信提醒。
+        需要一个 GitHub Fine-grained Token。<br>
+        <a href="https://github.com/settings/tokens?type=beta" target="_blank" style="color:var(--primary)">点击创建 Token →</a><br>
+        Repository: <strong>YuShuPYQ/yuanjin-tongji</strong><br>
+        Permissions: <strong>Contents → Read and write</strong><br><br>
+        创建后粘贴到这里，点"同步"。<br>
+        每天 8:00 通过 Server酱 推送到你的微信 📱
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-ghost" id="syncModalCancel" style="flex:1">取消</button>
@@ -678,7 +679,7 @@ body {
 // ============================================================
 
 // ---- Constants ----
-const APP_VERSION = 15;
+const APP_VERSION = 16;
 const SPAN_THRESHOLDS = { year: 365, month: 30, week: 7 };
 const VIEWS = ['year', 'month', 'week', 'day'];
 const STORAGE_KEY = 'yjtj_tasks_v2';
@@ -1667,51 +1668,6 @@ function exportTasks() {
   URL.revokeObjectURL(url);
 }
 
-// ---- Push Notification ----
-const VAPID_PUBLIC_KEY = 'BMITmN_kNBOu93XbAeFkJfypjIx1Gxs2d6aI9XYaiuJNJoN2Ox-HQAhf_xuV1c8Ul86Wa91MNhkgFeoLzsou_f4';
-
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = atob(base64);
-  return new Uint8Array([...rawData].map(char => char.charCodeAt(0)));
-}
-
-async function subscribeToPush() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    showToast('你的浏览器不支持通知功能');
-    return;
-  }
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') {
-    showToast('需要允许通知权限才能接收提醒');
-    return;
-  }
-  try {
-    const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if (sub) {
-      showToast('你已经订阅了通知，无需重复操作');
-      return;
-    }
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-    });
-    localStorage.setItem('yjtj_push_sub', JSON.stringify(sub.toJSON()));
-    showToast('🔔 已订阅每日通知！同步后每天早上 8:00 收到提醒');
-    document.getElementById('btnNotify').style.color = 'var(--success)';
-  } catch (e) {
-    showToast('订阅失败: ' + e.message);
-  }
-}
-
-function getPushSubscription() {
-  const raw = localStorage.getItem('yjtj_push_sub');
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
-}
-
 // ---- Sync to WeChat via GitHub ----
 let _syncing = false;
 
@@ -1753,13 +1709,11 @@ async function doSync() {
       }
     } catch (e) { /* file doesn't exist yet */ }
 
-    // Build payload with push subscription
-    const pushSub = getPushSubscription();
+    // Build payload
     const tasksJson = JSON.stringify({
       syncedAt: new Date().toISOString(),
       total: state.tasks.length,
-      tasks: state.tasks,
-      pushSubscription: pushSub
+      tasks: state.tasks
     }, null, 2);
 
     const body = {
@@ -1856,8 +1810,7 @@ function bindEvents() {
 
   document.getElementById('btnExport').addEventListener('click', exportTasks);
 
-  // Notify & Sync
-  document.getElementById('btnNotify').addEventListener('click', subscribeToPush);
+  // Sync
   document.getElementById('btnSync').addEventListener('click', openSyncModal);
   document.getElementById('syncModalClose').addEventListener('click', closeSyncModal);
   document.getElementById('syncModalCancel').addEventListener('click', closeSyncModal);
@@ -1887,10 +1840,6 @@ function init() {
   render();
   document.getElementById('inputStart').value = fmtDate(new Date());
   document.getElementById('inputEnd').value = fmtDate(new Date());
-  // Restore notification state
-  if (getPushSubscription()) {
-    document.getElementById('btnNotify').style.color = 'var(--success)';
-  }
   console.log('✅ 远近通记 v2 已就绪');
 }
 init();

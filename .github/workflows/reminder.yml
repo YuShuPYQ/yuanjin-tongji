@@ -1,4 +1,4 @@
-name: 每日推送提醒
+name: 每日微信提醒
 
 on:
   schedule:
@@ -18,7 +18,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install requests pywebpush
+        run: pip install requests
 
-      - name: Send daily reminder
+      - name: Send WeChat reminder via Server酱
         run: python server/send_reminder.py
