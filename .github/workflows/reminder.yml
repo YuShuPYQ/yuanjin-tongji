@@ -1,0 +1,24 @@
+name: 每日微信提醒
+
+on:
+  schedule:
+    # 北京时间 08:00 = UTC 00:00
+    - cron: "0 0 * * *"
+  workflow_dispatch:  # 允许手动触发测试
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Send WeChat reminder
+        run: python server/send_reminder.py

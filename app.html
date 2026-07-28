@@ -653,16 +653,14 @@ body {
     </div>
     <div style="padding:20px">
       <div class="form-group">
-        <label class="form-label">同步服务器地址</label>
-        <input class="form-input" type="url" id="syncUrl" placeholder="https://your-server.com/sync">
-      </div>
-      <div class="form-group">
-        <label class="form-label">API Key</label>
-        <input class="form-input" type="text" id="syncApiKey" placeholder="your-api-key">
+        <label class="form-label">GitHub Token</label>
+        <input class="form-input" type="password" id="syncApiKey" placeholder="ghp_xxxxxxxxxxxx">
       </div>
       <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px;line-height:1.6">
-        部署后端服务后，将服务器地址和 API Key 填到这里。<br>
-        点击"同步"即可将本地待办数据推送到服务器，服务器每天早上8点通过公众号模板消息推送提醒。
+        需要一个 GitHub Fine-grained Token，权限选 <strong>Contents: Read and write</strong>。<br>
+        获取方式：<a href="https://github.com/settings/tokens?type=beta" target="_blank" style="color:var(--primary)">GitHub → Settings → Developer settings → Fine-grained tokens</a><br>
+        Repository 选 <strong>YuShuPYQ/yuanjin-tongji</strong><br><br>
+        点击"同步"会将任务数据推送到仓库，GitHub Action 每天 8:00 发送微信提醒。
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-ghost" id="syncModalCancel" style="flex:1">取消</button>
@@ -679,7 +677,7 @@ body {
 // ============================================================
 
 // ---- Constants ----
-const APP_VERSION = 13;
+const APP_VERSION = 14;
 const SPAN_THRESHOLDS = { year: 365, month: 30, week: 7 };
 const VIEWS = ['year', 'month', 'week', 'day'];
 const STORAGE_KEY = 'yjtj_tasks_v2';
@@ -1668,7 +1666,7 @@ function exportTasks() {
   URL.revokeObjectURL(url);
 }
 
-// ---- Sync to WeChat ----
+// ---- Sync to WeChat via GitHub ----
 let _syncing = false;
 
 async function doSync() {
@@ -1676,17 +1674,15 @@ async function doSync() {
   const statusEl = document.getElementById('syncStatus');
   const saveBtn = document.getElementById('syncModalSave');
 
-  const syncUrl = document.getElementById('syncUrl').value.trim();
-  const apiKey = document.getElementById('syncApiKey').value.trim();
-
-  if (!syncUrl || !apiKey) {
-    statusEl.innerHTML = '<span style="color:var(--danger)">请填写服务器地址和 API Key</span>';
+  const token = document.getElementById('syncApiKey').value.trim();
+  if (!token) {
+    statusEl.innerHTML = '<span style="color:var(--danger)">请填写 GitHub Token</span>';
     return;
   }
 
   // Save settings
-  localStorage.setItem('yjtj_sync_url', syncUrl);
-  localStorage.setItem('yjtj_sync_key', apiKey);
+  localStorage.setItem('yjtj_sync_url', 'github');
+  localStorage.setItem('yjtj_sync_key', token);
 
   _syncing = true;
   saveBtn.disabled = true;
@@ -1694,25 +1690,54 @@ async function doSync() {
   statusEl.innerHTML = '<span style="color:var(--primary)">⏳ 正在同步...</span>';
 
   try {
-    const resp = await fetch(syncUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': apiKey
-      },
-      body: JSON.stringify({
-        syncedAt: new Date().toISOString(),
-        tasks: state.tasks
-      })
+    const API = 'https://api.github.com/repos/YuShuPYQ/yuanjin-tongji/contents/tasks_sync.json';
+    const headers = {
+      'Authorization': 'Bearer ' + token,
+      'Content-Type': 'application/json',
+      'Accept': 'application/vnd.github+json'
+    };
+
+    // Get current SHA (if file exists)
+    let sha = null;
+    try {
+      const getResp = await fetch(API, { headers });
+      if (getResp.ok) {
+        const data = await getResp.json();
+        sha = data.sha;
+      }
+    } catch (e) { /* file doesn't exist yet */ }
+
+    // Build payload
+    const tasksJson = JSON.stringify({
+      syncedAt: new Date().toISOString(),
+      total: state.tasks.length,
+      tasks: state.tasks
+    }, null, 2);
+
+    const body = {
+      message: 'sync: 更新任务数据 ' + fmtDate(new Date()),
+      content: btoa(unescape(encodeURIComponent(tasksJson))),
+      branch: 'main'
+    };
+    if (sha) body.sha = sha;
+
+    const resp = await fetch(API, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(body)
     });
 
     if (resp.ok) {
-      const result = await resp.json();
-      statusEl.innerHTML = `<span style="color:var(--success)">✅ 同步成功！${result.count} 条任务已推送到服务器</span>`;
-      showToast('已同步 ' + result.count + ' 条任务');
+      statusEl.innerHTML = `<span style="color:var(--success)">✅ 同步成功！${state.tasks.length} 条任务已推送<br><span style="font-size:11px">GitHub Action 每天早上 8:00 发送微信提醒</span></span>`;
+      showToast('已同步 ' + state.tasks.length + ' 条任务');
     } else {
       const err = await resp.json().catch(() => ({}));
-      statusEl.innerHTML = `<span style="color:var(--danger)">❌ 同步失败: ${err.error || resp.status}</span>`;
+      const msg = err.message || resp.statusText || '';
+      if (msg.includes('Bad credentials')) {
+        statusEl.innerHTML = '<span style="color:var(--danger)">❌ Token 无效，请检查</span>';
+      } else {
+        statusEl.innerHTML = `<span style="color:var(--danger)">❌ 同步失败: ${msg || resp.status}</span>`;
+      }
     }
   } catch (e) {
     statusEl.innerHTML = `<span style="color:var(--danger)">❌ 连接失败: ${e.message}</span>`;
@@ -1724,9 +1749,7 @@ async function doSync() {
 }
 
 function openSyncModal() {
-  const url = localStorage.getItem('yjtj_sync_url') || '';
   const key = localStorage.getItem('yjtj_sync_key') || '';
-  document.getElementById('syncUrl').value = url;
   document.getElementById('syncApiKey').value = key;
   document.getElementById('syncStatus').innerHTML = '';
   document.getElementById('syncModal').style.display = 'flex';
