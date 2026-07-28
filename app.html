@@ -678,7 +678,7 @@ body {
 // ============================================================
 
 // ---- Constants ----
-const APP_VERSION = 16;
+const APP_VERSION = 17;
 const SPAN_THRESHOLDS = { year: 365, month: 30, week: 7 };
 const VIEWS = ['year', 'month', 'week', 'day'];
 const STORAGE_KEY = 'yjtj_tasks_v2';
@@ -867,7 +867,8 @@ function getViewPeriod() {
     end.setDate(end.getDate() + 30);
     return { start, end };
   } else if (v === 'week') {
-    const ws = getWeekStart(d);
+    // Week view means a rolling 7-day window from today, not Monday-Sunday.
+    const ws = new Date(); ws.setHours(0,0,0,0);
     const we = new Date(ws); we.setDate(we.getDate() + 6);
     return { start: ws, end: we };
   } else {
@@ -885,6 +886,16 @@ function taskOverlapsPeriod(task, period) {
     const d = parseDate(dateStr);
     return d >= period.start && d <= period.end;
   });
+}
+
+function taskHasOccurrenceInPeriod(task, period) {
+  const totalDays = daysBetween(period.start, period.end);
+  for (let i = 0; i <= totalDays; i++) {
+    const d = new Date(period.start);
+    d.setDate(d.getDate() + i);
+    if (taskCoversDate(task, fmtDate(d))) return true;
+  }
+  return false;
 }
 
 function taskVisibleInCurrentViewHierarchy(task) {
@@ -909,8 +920,9 @@ function getViewTasks() {
   const showAll = state.showAll;
   const period = getViewPeriod();
 
-  // Step 1: Filter tasks that overlap with this view's time period
-  const relevant = active.filter(t => taskOverlapsPeriod(t, period));
+  // Step 1: Filter tasks for this view's time period.
+  // Week view uses actual occurrences within the rolling 7-day window from today.
+  const relevant = active.filter(t => view === 'week' ? taskHasOccurrenceInPeriod(t, period) : taskOverlapsPeriod(t, period));
 
   // Step 2: Group by ORIGINAL category (total span), not remaining time
   const categorized = { year: [], month: [], week: [], day: [] };
@@ -1244,7 +1256,8 @@ function renderDayHeader(d) {
 }
 
 function renderWeekCalendar(d) {
-  const start = getWeekStart(d);
+  const period = getViewPeriod();
+  const start = period.start;
   const todayStr = fmtDate(new Date());
   const dowLabels = ['一','二','三','四','五','六','日'];
 
