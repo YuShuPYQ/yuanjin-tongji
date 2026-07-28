@@ -648,7 +648,7 @@ body {
 // ============================================================
 
 // ---- Constants ----
-const APP_VERSION = 11;
+const APP_VERSION = 12;
 const SPAN_THRESHOLDS = { year: 365, month: 30, week: 7 };
 const VIEWS = ['year', 'month', 'week', 'day'];
 const STORAGE_KEY = 'yjtj_tasks_v2';
@@ -779,6 +779,28 @@ function taskCoversYear(task, year) {
   return endYear === year;
 }
 
+// Find the next occurrence date of a task on or after a reference date.
+// Returns a Date object, or null if no future occurrence.
+function findNextOccurrence(task, fromDate) {
+  const start = parseDate(task.startDate);
+  const end = parseDate(task.endDate);
+  if (fromDate > end) return null;
+
+  if (task.continuous === true) {
+    const interval = getRepeatInterval(task);
+    const offset = Math.max(0, daysBetween(start, fromDate));
+    const k = Math.ceil(offset / interval);
+    const day = k * interval;
+    if (day > daysBetween(start, end)) return null;
+    const d = new Date(start);
+    d.setDate(d.getDate() + day);
+    return d;
+  }
+  // Non-continuous: only the end date
+  if (fromDate <= end) return end;
+  return null;
+}
+
 // Get tasks for a date using current view's hierarchy rule.
 // Used by month/week calendar cells so the numbers match the visible list.
 function getTasksForDateInCurrentView(dateStr) {
@@ -899,6 +921,29 @@ function getViewTasks() {
     // Default: only show tasks whose ORIGINAL category matches current view
     if (categorized[view].length > 0) {
       result.push({ category: view, tasks: categorized[view] });
+    }
+  }
+
+  // For week/day views: preview year/month tasks occurring within 3 days
+  if ((view === 'week' || view === 'day') && showAll) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const previewTasks = [];
+    for (const cat of ['year', 'month']) {
+      if (!categorized[cat]) continue;
+      for (const t of categorized[cat]) {
+        // Skip if already shown in main result
+        if (result.some(g => g.tasks.includes(t))) continue;
+        const nextDate = findNextOccurrence(t, today);
+        if (!nextDate) continue;
+        const daysUntil = daysBetween(today, nextDate);
+        if (daysUntil >= 0 && daysUntil <= 3) {
+          previewTasks.push({ ...t, _preview: true, _previewDate: fmtDate(nextDate), _daysUntil: daysUntil });
+        }
+      }
+    }
+    if (previewTasks.length > 0) {
+      previewTasks.sort(sortBySpan);
+      result.push({ category: 'upcoming', tasks: previewTasks });
     }
   }
 
@@ -1247,6 +1292,7 @@ function switchView(view) {
 
 // ---- Task Card ----
 function renderTaskCard(t) {
+  const isPreview = t._preview === true;
   const originalCat = getOriginalCategory(t);
   const displayCat = getDisplayCategory(t);
   const spanDays = daysBetween(parseDate(t.startDate), parseDate(t.endDate)) + 1;
@@ -1255,18 +1301,21 @@ function renderTaskCard(t) {
   const spanBadges = { year:'span-year', month:'span-month', week:'span-week', day:'span-day' };
   const isContinuous = t.continuous === true;
   const occurrenceCount = isContinuous ? Math.ceil(spanDays / getRepeatInterval(t)) : 1;
+  const previewStyle = isPreview ? 'opacity:0.6;border-left:3px solid #9ca3af' : '';
+  const titleStyle = isPreview ? 'color:#6b7280' : '';
 
-  return `<div class="task-card ${isCompleted?'completed':''}" data-id="${t.id}">
+  return `<div class="task-card ${isCompleted?'completed':''}" data-id="${t.id}" style="${previewStyle}">
     <div class="task-checkbox ${isCompleted?'done':''}"></div>
     <div class="task-info">
-      <div class="task-title">${escHtml(t.title)}</div>
+      <div class="task-title" style="${titleStyle}">${escHtml(t.title)}</div>
       <div class="task-meta">
-        <span class="task-date">📅 ${t.startDate} ${getWeekdayLabelFromStr(t.startDate)} → ${t.endDate} ${getWeekdayLabelFromStr(t.endDate)}</span>
-        <span class="task-date">⏱ ${spanDays}天</span>
+        <span class="task-date" style="${isPreview?'color:#9ca3af':''}">📅 ${t.startDate} ${getWeekdayLabelFromStr(t.startDate)} → ${t.endDate} ${getWeekdayLabelFromStr(t.endDate)}</span>
+        <span class="task-date" style="${isPreview?'color:#9ca3af':''}">⏱ ${spanDays}天</span>
         <span class="task-priority priority-${t.priority}">${priLabel}优先级</span>
         <span class="task-span-badge ${spanBadges[originalCat]}">${getSpanLabel(originalCat)}跨度</span>
         ${!isContinuous ? '<span class="task-span-badge" style="background:#fce7f3;color:#db2777">截止日</span>' : '<span class="task-span-badge" style="background:#e0f2fe;color:#0284c7">每' + getRepeatInterval(t) + '天·共' + occurrenceCount + '次</span>'}
         ${displayCat !== originalCat ? `<span class="task-span-badge ${spanBadges[displayCat]}" style="opacity:.7">→${getSpanLabel(displayCat)}视图</span>` : ''}
+        ${isPreview ? `<span class="task-span-badge" style="background:#f3f4f6;color:#6b7280">📢 ${t._daysUntil === 0 ? '今天' : t._daysUntil + '天后'}开始</span>` : ''}
         ${t.tags&&t.tags.length>0?t.tags.map(tag=>`<span style="font-size:10px;color:var(--text-tertiary);background:var(--surface-hover);padding:1px 6px;border-radius:4px">${escHtml(tag)}</span>`).join(''):''}
       </div>
       ${t.description?`<div style="font-size:12px;color:var(--text-tertiary);margin-top:4px">${escHtml(t.description)}</div>`:''}
@@ -1296,7 +1345,7 @@ function renderTaskList() {
     const msg = emptyMsgs[v] || emptyMsgs.day;
     html += `<div class="empty-state"><div class="empty-icon">${msg.icon}</div><div class="empty-title">${msg.title}</div><div class="empty-desc">${msg.desc}</div></div>`;
   } else {
-    const catLabels = { year: '年度事项', month: '月度事项', week: '周度事项', day: '日度事项' };
+    const catLabels = { year: '年度事项', month: '月度事项', week: '周度事项', day: '日度事项', upcoming: '📢 即将开始' };
     for (const group of viewTasks) {
       html += `<div class="task-section">
         <div class="section-header">
