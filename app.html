@@ -510,6 +510,7 @@ body {
       <span class="app-title">远近通记</span>
     </div>
     <div class="header-actions">
+      <button class="btn btn-icon btn-ghost" id="btnFinance" title="财务计算">💰</button>
       <button class="btn btn-icon btn-ghost" id="btnSync" title="同步到微信">📡</button>
       <button class="btn btn-icon btn-ghost" id="btnSearch" title="搜索">🔍</button>
       <button class="btn btn-icon btn-ghost" id="btnExport" title="导出备份">📥</button>
@@ -685,7 +686,7 @@ body {
 // ============================================================
 
 // ---- Constants ----
-const APP_VERSION = 18;
+const APP_VERSION = 19;
 const SPAN_THRESHOLDS = { year: 365, month: 30, week: 7 };
 const VIEWS = ['year', 'month', 'week', 'day'];
 const STORAGE_KEY = 'yjtj_tasks_v2';
@@ -1854,6 +1855,9 @@ function bindEvents() {
   });
 
   document.getElementById('btnExport').addEventListener('click', exportTasks);
+  document.getElementById('btnFinance').addEventListener('click', () => {
+    window.location.href = './finance.html';
+  });
 
   // Sync
   document.getElementById('btnSync').addEventListener('click', openSyncModal);

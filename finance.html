@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人财务管理</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:"Microsoft YaHei",sans-serif;}
+body{background:#f5f7fa;padding:16px 12px;}
+.container{max-width:860px;margin:0 auto;display:block;}
+.top-nav{max-width:860px;margin:0 auto 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.back-link{display:inline-flex;align-items:center;gap:6px;text-decoration:none;background:#fff;color:#2b6cb0;border:1px solid #bee3f8;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,.06);} 
+.back-link:hover{background:#ebf8ff;}
+h1{text-align:center;color:#2d3748;margin-bottom:20px;font-size:24px;}
+.card{background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 10px rgba(0,0,0,0.07);margin-bottom:14px;}
+.card-title{font-size:17px;font-weight:600;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;}
+.title-left{display:flex;align-items:center;gap:8px;}
+.toggle-btn{width:26px;height:26px;border-radius:4px;border:1px solid #ccc;background:#f0f0f0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;padding:0;}
+.toggle-btn:hover{background:#e2e2e2;}
+.row-flex{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
+.item-row{background:#f8fafc;padding:10px;border-radius:8px;margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+input,select{padding:8px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:14px;outline:none;transition:.2s;}
+input:focus,select:focus{border-color:#3182ce;box-shadow:0 0 0 2px rgba(49,130,206,.2);}
+.name-input{width:140px;}
+.money-input{width:110px;}
+.day-select{width:70px;}
+button{padding:7px 12px;border:none;border-radius:6px;cursor:pointer;font-size:13px;transition:.2s;white-space:nowrap;}
+.btn-add{background:#38a169;color:#fff;}
+.btn-del{background:#e53e3e;color:#fff;}
+.btn-reset{background:#718096;color:#fff;}
+.btn-month{background:#4299e1;color:#fff;margin:0 4px;}
+.btn-confirm{background:#3182ce;color:#fff;}
+.btn-add:hover{background:#2f855a;}
+.btn-del:hover{background:#c53030;}
+.btn-reset:hover{background:#4a5568;}
+.btn-month:hover{background:#3182ce;}
+.btn-confirm:hover{background:#2b6cb0;}
+.calc-result{margin-top:10px;padding:12px;background:#ebf8ff;border-radius:8px;}
+.result-item{font-size:15px;margin:7px 0;display:flex;justify-content:space-between;}
+.result-value{font-weight:bold;color:#2b6cb0;}
+.month-manage{border-top:4px solid #805ad5;}
+.init-card{border-top:4px solid #3182ce;}
+.income-card{border-top:4px solid #38a169;}
+.pay-card{border-top:4px solid #e53e3e;}
+.daily-card{border-top:4px solid #ed8936;}
+.total-card{border-top:4px solid #2c5282;}
+.init-deposit{margin-bottom:12px;}
+.init-deposit label{font-size:14px;margin-right:8px;}
+#initMoney{width:160px;}
+.collapse-wrap{max-height:2000px;overflow:hidden;transition:max-height .3s ease-out;}
+.collapse-wrap.collapsed{max-height:0;margin-bottom:0;}
+.month-list{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;}
+.month-tag{background:#e9d8fd;padding:6px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;}
+.month-tag.active{background:#805ad5;color:#fff;}
+.year-month-select{margin-top:10px;padding:12px;background:#f0f4ff;border-radius:8px;display:none;}
+.ym-input{width:80px;}
+.update-date-box{padding:8px 10px;background:#f7f3ff;border-radius:8px;margin-bottom:10px;}
+#updateDate{width:160px;}
+</style>
+</head>
+<body>
+<div class="top-nav">
+  <a class="back-link" href="./index.html">← 返回远近通记</a>
+</div>
+
+<div class="container" id="mainBox">
+<h1>多周期个人财务管理</h1>
+
+<!-- 月份数据管理（内嵌数据更新日期） -->
+<div class="card month-manage">
+  <div class="card-title">
+    <div class="title-left">
+      <button class="toggle-btn" onclick="toggleBlock('monthManage')" id="toggle-monthManage">▼</button>
+      <span>月份数据管理</span>
+    </div>
+    <button class="btn-month" onclick="showYearMonthSelect()">+ 新建周期</button>
+  </div>
+  <div id="monthManage" class="collapse-wrap">
+    <!-- 内嵌一小块数据更新日期 -->
+    <div class="update-date-box row-flex">
+      <label>数据更新日期：</label>
+      <input type="text" id="updateDate" placeholder="例：2026-07-15" oninput="saveCurrentMonth()">
+    </div>
+
+    <div class="row-flex">
+      <label>当前统计周期：</label>
+      <span id="currentMonthLabel">2026-07-15 ~ 2026-08-15</span>
+    </div>
+    <div class="year-month-select" id="yearMonthBox">
+      <div class="row-flex">
+        <label>起始年份(2026-2030)：</label>
+        <input class="ym-input" type="number" id="inputYear" value="2026" min="2026" max="2030">
+        <label>起始月份(1-12)：</label>
+        <input class="ym-input" type="number" id="inputMonth" value="7" min="1" max="12">
+        <button class="btn-confirm" onclick="confirmCreateMonth()">确认创建</button>
+        <button class="btn-reset" onclick="hideYearMonthSelect()">取消</button>
+      </div>
+    </div>
+    <div class="month-list" id="monthList"></div>
+    <div class="row-flex" style="margin-top:10px;">
+      <button class="btn-del" onclick="deleteCurrentMonth()">删除当前周期</button>
+      <button class="btn-reset" onclick="clearAllStorage()">清空全部周期数据</button>
+    </div>
+  </div>
+</div>
+
+<!-- 初始存款 -->
+<div class="card init-card">
+  <div class="card-title">
+    <div class="title-left">
+      <button class="toggle-btn" onclick="toggleBlock('initWrap')" id="toggle-initWrap">▼</button>
+      <span>基础资金设置</span>
+    </div>
+  </div>
+  <div id="initWrap" class="collapse-wrap">
+    <div class="init-deposit row-flex">
+      <label>周期初始可用存款：</label>
+      <input type="number" id="initMoney" placeholder="存款金额" value="0" oninput="calcAll();saveCurrentMonth()">
+      <span>元</span>
+    </div>
+  </div>
+</div>
+
+<!-- 周期收入 -->
+<div class="card income-card">
+  <div class="card-title">
+    <div class="title-left">
+      <button class="toggle-btn" onclick="toggleBlock('incomeWrap')" id="toggle-incomeWrap">▼</button>
+      <span>周期收入列表</span>
+    </div>
+    <button class="btn-add" onclick="addIncomeRow()">+ 添加收入项</button>
+  </div>
+  <div id="incomeWrap" class="collapse-wrap"></div>
+  <div class="calc-result">
+    <div class="result-item">
+      <span>周期总收入：</span>
+      <span class="result-value" id="totalIncome">0.00 元</span>
+    </div>
+  </div>
+</div>
+
+<!-- 固定支出 -->
+<div class="card pay-card">
+  <div class="card-title">
+    <div class="title-left">
+      <button class="toggle-btn" onclick="toggleBlock('payWrap')" id="toggle-payWrap">▼</button>
+      <span>周期固定支出列表</span>
+    </div>
+    <button class="btn-add" onclick="addPayRow()">+ 添加固定支出</button>
+  </div>
+  <div id="payWrap" class="collapse-wrap"></div>
+  <div class="calc-result">
+    <div class="result-item">
+      <span>固定支出合计：</span>
+      <span class="result-value" id="totalPayOnly">0.00 元</span>
+    </div>
+  </div>
+</div>
+
+<!-- 日常支出（带1~30日期下拉） -->
+<div class="card daily-card">
+  <div class="card-title">
+    <div class="title-left">
+      <button class="toggle-btn" onclick="toggleBlock('dailyItemWrap')" id="toggle-dailyItemWrap">▼</button>
+      <span>日常支出</span>
+    </div>
+    <button class="btn-add" onclick="addDailyRow(event)">+ 添加日常支出</button>
+  </div>
+  <div id="dailyItemWrap" class="collapse-wrap">
+    <div id="dailyWrap"></div>
+  </div>
+  <div class="calc-result">
+    <div class="result-item">
+      <span>日常支出合计：</span>
+      <span class="result-value" id="totalDaily">0.00 元</span>
+    </div>
+  </div>
+</div>
+
+<!-- 资金测算汇总 -->
+<div class="card total-card">
+  <div class="card-title">
+    <div class="title-left">
+      <button class="toggle-btn" onclick="toggleBlock('resultWrap')" id="toggle-resultWrap">▼</button>
+      <span>周期资金测算结果</span>
+    </div>
+    <button class="btn-reset" onclick="resetCurrentMonth()">重置本周期数据</button>
+  </div>
+  <div id="resultWrap" class="collapse-wrap">
+    <div class="calc-result">
+      <div class="result-item">
+        <span>总资金（初始存款+周期收入）：</span>
+        <span class="result-value" id="totalFund">0.00 元</span>
+      </div>
+      <div class="result-item">
+        <span>周期可用额度（总资金-总固定支出）：</span>
+        <span class="result-value" id="canUse">0.00 元</span>
+      </div>
+      <div class="result-item">
+        <span>当月15日至次月15日平均每天可用额度（÷30天）：</span>
+        <span class="result-value" id="dayUse">0.00 元</span>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+// 全局财务变量
+let currentMonthKey = "";
+let allMonthData = {};
+const STORAGE_KEY = "financeMonthData";
+const YEAR_MIN = 2026;
+const YEAR_MAX = 2030;
+
+// 页面初始化
+function pageInit(){
+  loadStorage();
+  if(Object.keys(allMonthData).length === 0){
+    autoCreateDefaultMonth();
+  }else{
+    switchMonth(Object.keys(allMonthData)[0]);
+  }
+  renderMonthList();
+  calcAll();
+}
+
+function showYearMonthSelect(){
+  document.getElementById("yearMonthBox").style.display = "block";
+}
+function hideYearMonthSelect(){
+  document.getElementById("yearMonthBox").style.display = "none";
+}
+
+// 生成1-30日下拉
+function buildDayOption(){
+  let html = "<select class='day-select' oninput='calcAll();saveCurrentMonth()'>";
+  for(let d=1;d<=30;d++){
+    html += `<option value="${d}">${d}日</option>`;
+  }
+  html += "</select>";
+  return html;
+}
+
+function confirmCreateMonth(){
+  const y = Number(document.getElementById("inputYear").value);
+  const m = Number(document.getElementById("inputMonth").value);
+  if(isNaN(y) || y < YEAR_MIN || y > YEAR_MAX){
+    alert("年份必须在2026-2030之间");
+    return;
+  }
+  if(isNaN(m) || m < 1 || m > 12){
+    alert("月份必须是1-12");
+    return;
+  }
+  const monthStr = String(m).padStart(2,"0");
+  let newKey = `${y}-${monthStr}`;
+  let suffix = 1;
+  while(allMonthData[newKey]){
+    newKey = `${y}-${monthStr}-${suffix}`;
+    suffix++;
+  }
+  allMonthData[newKey] = {
+    updateDate:"",
+    initMoney:0,
+    incomeList:[],
+    payList:[],
+    dailyList:[]
+  };
+  saveStorage();
+  hideYearMonthSelect();
+  switchMonth(newKey);
+  renderMonthList();
+}
+
+function autoCreateDefaultMonth(){
+  const key = "2026-07";
+  allMonthData[key] = {
+    updateDate:"",
+    initMoney:0,
+    incomeList:[],
+    payList:[],
+    dailyList:[]
+  };
+  saveStorage();
+  switchMonth(key);
+}
+
+function loadStorage(){
+  const cache = localStorage.getItem(STORAGE_KEY);
+  if(cache) allMonthData = JSON.parse(cache);
+}
+function saveStorage(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(allMonthData));
+}
+
+function saveCurrentMonth(){
+  const updateDate = document.getElementById("updateDate").value;
+  const initMoney = Number(document.getElementById("initMoney").value)||0;
+  let incomeList = [];
+  document.querySelectorAll("#incomeWrap .item-row").forEach(row=>{
+    const name = row.querySelector(".name-input").value;
+    const money = Number(row.querySelector(".money-input").value)||0;
+    incomeList.push({name,money});
+  })
+  let payList = [];
+  document.querySelectorAll("#payWrap .item-row").forEach(row=>{
+    const name = row.querySelector(".name-input").value;
+    const money = Number(row.querySelector(".money-input").value)||0;
+    payList.push({name,money});
+  })
+  let dailyList = [];
+  document.querySelectorAll("#dailyWrap .item-row").forEach(row=>{
+    const day = row.querySelector(".day-select").value;
+    const name = row.querySelector(".name-input").value;
+    const money = Number(row.querySelector(".money-input").value)||0;
+    dailyList.push({day,name,money});
+  })
+  allMonthData[currentMonthKey] = {updateDate,initMoney,incomeList,payList,dailyList};
+  saveStorage();
+}
+
+function loadMonthData(key){
+  const data = allMonthData[key];
+  document.getElementById("incomeWrap").innerHTML = "";
+  document.getElementById("payWrap").innerHTML = "";
+  document.getElementById("dailyWrap").innerHTML = "";
+  document.getElementById("initMoney").value = data.initMoney;
+  document.getElementById("updateDate").value = data.updateDate || "";
+  // 计算15日周期区间
+  const [y,m] = key.split("-").map(Number);
+  let nextY = y;
+  let nextM = m + 1;
+  if(nextM > 12){
+    nextM = 1;
+    nextY = y + 1;
+  }
+  const showText = `${y}-${String(m).padStart(2,"0")}-15 ~ ${nextY}-${String(nextM).padStart(2,"0")}-15`;
+  document.getElementById("currentMonthLabel").innerText = showText;
+
+  data.incomeList.forEach(item=>{
+    addIncomeRow();
+    const last = document.querySelector("#incomeWrap .item-row:last-child");
+    last.querySelector(".name-input").value = item.name;
+    last.querySelector(".money-input").value = item.money;
+  })
+  data.payList.forEach(item=>{
+    addPayRow();
+    const last = document.querySelector("#payWrap .item-row:last-child");
+    last.querySelector(".name-input").value = item.name;
+    last.querySelector(".money-input").value = item.money;
+  })
+  data.dailyList.forEach(item=>{
+    addDailyRow();
+    const last = document.querySelector("#dailyWrap .item-row:last-child");
+    last.querySelector(".day-select").value = item.day;
+    last.querySelector(".name-input").value = item.name;
+    last.querySelector(".money-input").value = item.money;
+  })
+  calcAll();
+}
+
+function switchMonth(key){
+  currentMonthKey = key;
+  loadMonthData(key);
+  renderMonthList();
+}
+
+function renderMonthList(){
+  const wrap = document.getElementById("monthList");
+  wrap.innerHTML = "";
+  Object.keys(allMonthData).forEach(k=>{
+    const tag = document.createElement("div");
+    tag.className = "month-tag"+(k===currentMonthKey?" active":"");
+    tag.innerHTML = `<span onclick="switchMonth('${k}')">${k}周期</span>`;
+    wrap.appendChild(tag);
+  })
+}
+
+function deleteCurrentMonth(){
+  if(Object.keys(allMonthData).length <= 1){
+    alert("至少保留一个周期数据");
+    return;
+  }
+  delete allMonthData[currentMonthKey];
+  saveStorage();
+  const rest = Object.keys(allMonthData);
+  switchMonth(rest[0]);
+  renderMonthList();
+}
+
+function clearAllStorage(){
+  if(!confirm("确认删除所有周期财务数据？不可恢复！")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  allMonthData = {};
+  autoCreateDefaultMonth();
+  renderMonthList();
+}
+
+function resetCurrentMonth(){
+  document.getElementById("updateDate").value = "";
+  document.getElementById("initMoney").value = 0;
+  document.getElementById("incomeWrap").innerHTML = "";
+  document.getElementById("payWrap").innerHTML = "";
+  document.getElementById("dailyWrap").innerHTML = "";
+  saveCurrentMonth();
+  calcAll();
+}
+
+function toggleBlock(wrapId){
+  const wrap = document.getElementById(wrapId);
+  const btn = document.getElementById("toggle-"+wrapId);
+  wrap.classList.toggle("collapsed");
+  btn.innerText = wrap.classList.contains("collapsed") ? "▶" : "▼";
+}
+
+function addIncomeRow(){
+  const wrap = document.getElementById("incomeWrap");
+  const div = document.createElement("div");
+  div.className = "item-row row-flex";
+  div.innerHTML = `<input class="name-input" placeholder="收入名称" oninput="calcAll();saveCurrentMonth()"><input class="money-input" type="number" placeholder="金额" value="0" oninput="calcAll();saveCurrentMonth()"><button class="btn-del" onclick="this.parentElement.remove();calcAll();saveCurrentMonth()">删除</button>`;
+  wrap.appendChild(div);
+  calcAll();
+  saveCurrentMonth();
+}
+
+function addPayRow(){
+  const wrap = document.getElementById("payWrap");
+  const div = document.createElement("div");
+  div.className = "item-row row-flex";
+  div.innerHTML = `<input class="name-input" placeholder="支出名称" oninput="calcAll();saveCurrentMonth()"><input class="money-input" type="number" placeholder="金额" value="0" oninput="calcAll();saveCurrentMonth()"><button class="btn-del" onclick="this.parentElement.remove();calcAll();saveCurrentMonth()">删除</button>`;
+  wrap.appendChild(div);
+  calcAll();
+  saveCurrentMonth();
+}
+
+function addDailyRow(event){
+  if(event) event.stopPropagation();
+  const wrap = document.getElementById("dailyWrap");
+  const div = document.createElement("div");
+  div.className = "item-row row-flex";
+  div.innerHTML = `
+    ${buildDayOption()}
+    <input class="name-input" placeholder="支出名称" oninput="calcAll();saveCurrentMonth()">
+    <input class="money-input" type="number" placeholder="金额" value="0" oninput="calcAll();saveCurrentMonth()">
+    <button class="btn-del" onclick="this.parentElement.remove();calcAll();saveCurrentMonth()">删除</button>
+  `;
+  wrap.appendChild(div);
+  calcAll();
+  saveCurrentMonth();
+}
+
+function calcAll(){
+  let initMoney = Number(document.getElementById("initMoney").value)||0;
+  let sumIncome = 0;
+  document.querySelectorAll("#incomeWrap .money-input").forEach(i=>sumIncome += Number(i.value)||0);
+  document.getElementById("totalIncome").innerText = sumIncome.toFixed(2)+" 元";
+
+  let sumPayOnly = 0;
+  document.querySelectorAll("#payWrap .money-input").forEach(i=>sumPayOnly += Number(i.value)||0);
+  document.getElementById("totalPayOnly").innerText = sumPayOnly.toFixed(2)+" 元";
+
+  let sumDaily = 0;
+  document.querySelectorAll("#dailyWrap .money-input").forEach(i=>sumDaily += Number(i.value)||0);
+  document.getElementById("totalDaily").innerText = sumDaily.toFixed(2)+" 元";
+
+  const totalPay = sumPayOnly + sumDaily;
+  const totalFund = initMoney + sumIncome;
+  const canUse = totalFund - totalPay;
+  const dayUse = canUse / 30;
+
+  document.getElementById("totalFund").innerText = totalFund.toFixed(2)+" 元";
+  document.getElementById("canUse").innerText = canUse.toFixed(2)+" 元";
+  document.getElementById("dayUse").innerText = dayUse.toFixed(2)+" 元";
+}
+
+pageInit();
+</script>
+</body>
+</html>
