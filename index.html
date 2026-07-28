@@ -201,6 +201,12 @@ body {
   font-size:12px; color:var(--text-tertiary);
   display:flex; align-items:center; gap:4px;
 }
+.task-focus-date {
+  font-size:12px; font-weight:800; padding:4px 8px; border-radius:999px;
+  background:#fff7ed; color:#ea580c; border:1px solid #fed7aa;
+  box-shadow:0 1px 2px rgba(234,88,12,.12);
+}
+.task-focus-date.preview { background:#f3f4f6; color:#6b7280; border-color:#d1d5db; box-shadow:none; }
 .task-priority {
   font-size:10px; font-weight:600; padding:1px 6px; border-radius:4px;
 }
@@ -484,6 +490,7 @@ body {
   .task-actions { opacity:1; flex-direction:column; }
   .task-meta { gap:5px; }
   .task-date { font-size:10px; }
+  .task-focus-date { font-size:11px; padding:3px 7px; }
   .form-row { flex-direction:column; gap:0; }
   .modal-overlay { align-items:flex-end; }
   .modal { width:100%; max-width:none; max-height:92vh; border-radius:18px 18px 0 0; }
@@ -678,7 +685,7 @@ body {
 // ============================================================
 
 // ---- Constants ----
-const APP_VERSION = 17;
+const APP_VERSION = 18;
 const SPAN_THRESHOLDS = { year: 365, month: 30, week: 7 };
 const VIEWS = ['year', 'month', 'week', 'day'];
 const STORAGE_KEY = 'yjtj_tasks_v2';
@@ -896,6 +903,30 @@ function taskHasOccurrenceInPeriod(task, period) {
     if (taskCoversDate(task, fmtDate(d))) return true;
   }
   return false;
+}
+
+function getFirstOccurrenceInPeriod(task, period) {
+  const totalDays = daysBetween(period.start, period.end);
+  for (let i = 0; i <= totalDays; i++) {
+    const d = new Date(period.start);
+    d.setDate(d.getDate() + i);
+    if (taskCoversDate(task, fmtDate(d))) return d;
+  }
+  return null;
+}
+
+function getTaskFocusDateInfo(task) {
+  if (task._preview === true && task._previewDate) {
+    return { label: '预告日', dateStr: task._previewDate };
+  }
+  if (state.currentView === 'day') {
+    return { label: task.continuous === true ? '执行日' : '完成日', dateStr: fmtDate(getViewPeriod().start) };
+  }
+  if (state.currentView === 'week') {
+    const d = getFirstOccurrenceInPeriod(task, getViewPeriod());
+    if (d) return { label: task.continuous === true ? '执行日' : '完成日', dateStr: fmtDate(d) };
+  }
+  return { label: task.continuous === true ? '下次执行' : '完成日', dateStr: fmtDate(findNextOccurrence(task, new Date()) || parseDate(task.endDate)) };
 }
 
 function taskVisibleInCurrentViewHierarchy(task) {
@@ -1344,6 +1375,7 @@ function renderTaskCard(t) {
   const spanBadges = { year:'span-year', month:'span-month', week:'span-week', day:'span-day' };
   const isContinuous = t.continuous === true;
   const occurrenceCount = isContinuous ? Math.ceil(spanDays / getRepeatInterval(t)) : 1;
+  const focusDate = getTaskFocusDateInfo(t);
   const previewStyle = isPreview ? 'opacity:0.6;border-left:3px solid #9ca3af' : '';
   const titleStyle = isPreview ? 'color:#6b7280' : '';
 
@@ -1352,6 +1384,7 @@ function renderTaskCard(t) {
     <div class="task-info">
       <div class="task-title" style="${titleStyle}">${escHtml(t.title)}</div>
       <div class="task-meta">
+        <span class="task-focus-date ${isPreview?'preview':''}">🎯 ${focusDate.label} ${focusDate.dateStr} ${getWeekdayLabelFromStr(focusDate.dateStr)}</span>
         <span class="task-date" style="${isPreview?'color:#9ca3af':''}">📅 ${t.startDate} ${getWeekdayLabelFromStr(t.startDate)} → ${t.endDate} ${getWeekdayLabelFromStr(t.endDate)}</span>
         <span class="task-date" style="${isPreview?'color:#9ca3af':''}">⏱ ${spanDays}天</span>
         <span class="task-priority priority-${t.priority}">${priLabel}优先级</span>
