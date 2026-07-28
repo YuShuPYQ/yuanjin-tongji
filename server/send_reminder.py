@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 """
-远近通记 - 微信每日提醒发送脚本
+远近通记 - 每日提醒发送脚本
 由 GitHub Actions 每天北京时间 08:00 自动执行
+发送浏览器推送通知
 """
 
 import json, os, sys, requests
 from datetime import datetime, timedelta, date
 
 # ============================================================
-# 配置
+# VAPID 密钥（Web Push）
 # ============================================================
-WECHAT_APPID     = "wxc735fc7d373f0bdc"
-WECHAT_APPSECRET = os.getenv("WECHAT_APPSECRET", "b1a4478548607091a5375b829e0ae31f")
-WECHAT_OPENID    = "oB_Zf5uPmrwJKe7bOUkJ3WSr26LM"
-TEMPLATE_ID      = os.getenv("TEMPLATE_ID", "")  # 公众号后台申请模板消息后填入
-TASKS_FILE       = os.path.join(os.path.dirname(__file__), "..", "tasks_sync.json")
+VAPID_PRIVATE_KEY = "dM7d45LlIjFl7TzqtxzpaQmGd6yhWToT0-9RSfU28J8"
+VAPID_SUBJECT = "mailto:yushupyq@gmail.com"
+TASKS_FILE = os.path.join(os.path.dirname(__file__), "..", "tasks_sync.json")
 
 # ============================================================
 # 工具函数
@@ -83,42 +82,34 @@ def get_preview_tasks(tasks, today):
     return preview
 
 # ============================================================
-# 微信
+# Web Push 发送
 # ============================================================
-def get_token():
-    r = requests.get("https://api.weixin.qq.com/cgi-bin/token", params={
-        "grant_type": "client_credential",
-        "appid": WECHAT_APPID,
-        "secret": WECHAT_APPSECRET
-    }, timeout=10).json()
-    return r.get("access_token")
+def send_web_push(subscription, title, body):
+    """使用 pywebpush 发送浏览器推送通知"""
+    try:
+        from pywebpush import WebPush, WebPushException
+    except ImportError:
+        print("pywebpush 未安装，请在 requirements 中添加")
+        return False
 
-def send_template(token, today, today_tasks, previews):
-    if not TEMPLATE_ID:
-        print("⚠️ 未配置 TEMPLATE_ID，跳过发送")
-        return
-
-    today_names = [t.get("title","") for t in today_tasks[:8]]
-    preview_lines = [f'{p["daysUntil"]}天后·{p["title"]}' for p in previews[:5]]
-
-    today_text = "\n".join(f"  {i+1}. {n}" for i, n in enumerate(today_names)) if today_names else "  暂无"
-    preview_text = "\n".join(f"  📢 {l}" for l in preview_lines) if preview_lines else "  暂无"
-
-    payload = {
-        "touser": WECHAT_OPENID,
-        "template_id": TEMPLATE_ID,
-        "data": {
-            "first":    {"value": f"☀️ 早上好！{today.strftime('%m月%d日')} 待办提醒", "color": "#333333"},
-            "keyword1": {"value": f"{len(today_tasks)} 项", "color": "#1a73e8"},
-            "keyword2": {"value": today_text,  "color": "#333333"},
-            "keyword3": {"value": preview_text, "color": "#6b7280"},
-            "remark":   {"value": "打开远近通记查看详情", "color": "#9ca3af"},
-        }
-    }
-
-    url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={token}"
-    r = requests.post(url, json=payload, timeout=10).json()
-    print("发送结果:", r)
+    try:
+        wp = WebPush({
+            "vapid_private_key": VAPID_PRIVATE_KEY,
+            "vapid_claims": {"sub": VAPID_SUBJECT}
+        })
+        payload = json.dumps({"title": title, "body": body})
+        wp.send(
+            json.dumps(payload).encode(),
+            subscription,
+            ttl=86400
+        )
+        print("✅ 推送通知已发送")
+        return True
+    except WebPushException as e:
+        print(f"推送失败: {e}")
+        if hasattr(e, 'response') and e.response:
+            print(f"响应: {e.response.status_code} {e.response.text}")
+        return False
 
 # ============================================================
 # 主流程
@@ -128,11 +119,13 @@ def main():
 
     # 加载任务
     tasks = []
+    push_sub = None
     if os.path.exists(TASKS_FILE):
         with open(TASKS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
             tasks = data.get("tasks", [])
-    print(f"加载 {len(tasks)} 条任务")
+            push_sub = data.get("pushSubscription")
+    print(f"加载 {len(tasks)} 条任务, push_sub={'有' if push_sub else '无'}")
 
     # 今日 + 预告
     today_tasks = get_todays_tasks(tasks, today)
@@ -141,23 +134,29 @@ def main():
     print(f"今日待办: {len(today_tasks)} 项")
     for t in today_tasks:
         print(f"  - {t.get('title','')}")
-
     print(f"预告: {len(previews)} 项")
-    for p in previews:
-        print(f"  - {p['daysUntil']}天后: {p['title']}")
 
     if not today_tasks and not previews:
         print("无待办，跳过发送")
         return
 
-    # 发微信
-    token = get_token()
-    if not token:
-        print("❌ 获取 access_token 失败")
-        sys.exit(1)
+    # 构建通知内容
+    today_lines = [f"{i+1}. {t.get('title','')}" for i, t in enumerate(today_tasks[:8])]
+    preview_lines = [f"📢 {p['daysUntil']}天后·{p['title']}" for p in previews[:4]]
 
-    send_template(token, today, today_tasks, previews)
-    print("✅ 提醒发送完成")
+    title = f"☀️ {today.strftime('%m月%d日')} 待办 · {len(today_tasks)}项"
+    body_parts = []
+    if today_lines:
+        body_parts.append("今日:\n" + "\n".join(today_lines))
+    if preview_lines:
+        body_parts.append("预告:\n" + "\n".join(preview_lines))
+    body = "\n\n".join(body_parts)
+
+    # 发送推送通知
+    if push_sub:
+        send_web_push(push_sub, title, body)
+    else:
+        print("⚠️ 未找到 push subscription，无法发送推送")
 
 if __name__ == "__main__":
     main()

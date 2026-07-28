@@ -1,4 +1,5 @@
-const CACHE_NAME = "yjtj-pwa-v15";
+'use strict';
+const CACHE_NAME = "yjtj-pwa-v16";
 const ASSETS = [
   "./",
   "./index.html",
@@ -23,7 +24,6 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
 
-  // HTML/导航请求：network-first，确保拿到最新页面
   if (event.request.mode === "navigate" || event.request.destination === "document") {
     event.respondWith(
       fetch(event.request).then(response => {
@@ -35,12 +35,48 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // 其他资源：cache-first
   event.respondWith(
     caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
       const copy = response.clone();
       caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
       return response;
     }).catch(() => caches.match("./index.html")))
+  );
+});
+
+// Push notification
+self.addEventListener("push", event => {
+  let data = { title: "远近通记", body: "", icon: "./icons/icon-192.png" };
+  try {
+    const parsed = event.data ? event.data.json() : {};
+    if (parsed.title) data.title = parsed.title;
+    if (parsed.body) data.body = parsed.body;
+    if (parsed.icon) data.icon = parsed.icon;
+  } catch (e) {}
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon,
+      badge: "./icons/icon-192.png",
+      vibrate: [200, 100, 200],
+      requireInteraction: true,
+      tag: "yjtj-daily",
+      data: { url: self.location.origin + "/" }
+    })
+  );
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(clientList => {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && "focus" in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) return clients.openWindow(self.location.origin + "/");
+    })
   );
 });
