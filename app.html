@@ -644,9 +644,8 @@ body {
 </div>
 
 <!-- Sync Settings Modal -->
-<div class="modal" id="syncModal" style="display:none">
-  <div class="modal-overlay" id="syncOverlay"></div>
-  <div class="modal-content" style="max-width:380px">
+<div class="modal-overlay" id="syncOverlay" style="display:none">
+  <div class="modal" style="max-width:380px">
     <div class="modal-header">
       <h3>📡 同步到微信</h3>
       <button class="btn btn-icon btn-ghost" id="syncModalClose">✕</button>
@@ -1754,11 +1753,11 @@ function openSyncModal() {
   const key = localStorage.getItem('yjtj_sync_key') || '';
   document.getElementById('syncApiKey').value = key;
   document.getElementById('syncStatus').innerHTML = '';
-  document.getElementById('syncModal').style.display = 'flex';
+  document.getElementById('syncOverlay').style.display = 'flex';
 }
 
 function closeSyncModal() {
-  document.getElementById('syncModal').style.display = 'none';
+  document.getElementById('syncOverlay').style.display = 'none';
 }
 
 // ---- Event Bindings ----
