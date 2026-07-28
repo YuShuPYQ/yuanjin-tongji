@@ -1,5 +1,5 @@
 'use strict';
-const CACHE_NAME = "yjtj-pwa-v20";
+const CACHE_NAME = "yjtj-pwa-v21";
 const ASSETS = [
   "./",
   "./index.html",

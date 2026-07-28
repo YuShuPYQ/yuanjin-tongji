@@ -447,13 +447,23 @@ body {
 @media (max-width:640px) {
   body { background:var(--surface); }
   .app { padding:10px 12px calc(92px + env(safe-area-inset-bottom)); max-width:none; }
-  .header { padding:8px 0 12px; position:sticky; top:0; z-index:20; background:var(--surface); }
-  .logo { width:32px; height:32px; font-size:16px; }
-  .app-title { font-size:18px; }
-  .header-actions { gap:4px; }
-  .btn { min-height:40px; padding:8px 12px; }
-  .btn-primary { border-radius:999px; }
-  .btn-primary span + * { display:none; }
+  .header {
+    padding:8px 0 10px; position:sticky; top:0; z-index:20; background:var(--surface);
+    display:grid; grid-template-columns:1fr auto; grid-template-areas:"title add" "actions actions";
+    row-gap:8px; align-items:center;
+  }
+  .header-left { grid-area:title; min-width:0; }
+  .logo { width:32px; height:32px; font-size:16px; flex:0 0 auto; }
+  .app-title { font-size:18px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .header-actions {
+    grid-area:actions; gap:6px; overflow-x:auto; padding:2px 4px 4px 0;
+    scrollbar-width:none; -webkit-overflow-scrolling:touch;
+  }
+  .header-actions::-webkit-scrollbar { display:none; }
+  .header-actions .btn-icon { flex:0 0 38px; width:38px; height:38px; background:var(--surface-hover); border-color:var(--border); }
+  .header-actions #btnAdd { grid-area:add; position:absolute; right:0; top:4px; min-height:36px; padding:8px 12px; border-radius:999px; }
+  .btn { min-height:38px; padding:8px 12px; }
+  .btn-add-label { display:none; }
   .view-tabs {
     position:fixed; left:10px; right:10px; bottom:calc(10px + env(safe-area-inset-bottom));
     z-index:50; margin:0; box-shadow:var(--shadow-lg); border-radius:18px; padding:5px;
@@ -516,7 +526,7 @@ body {
       <button class="btn btn-icon btn-ghost" id="btnExport" title="导出备份">📥</button>
       <button class="btn btn-icon btn-ghost" id="btnStats" title="统计">📊</button>
       <button class="btn btn-primary" id="btnAdd">
-        <span>+</span> 新建事项
+        <span>+</span><span class="btn-add-label">新建事项</span>
       </button>
     </div>
   </div>
@@ -686,7 +696,7 @@ body {
 // ============================================================
 
 // ---- Constants ----
-const APP_VERSION = 19;
+const APP_VERSION = 20;
 const SPAN_THRESHOLDS = { year: 365, month: 30, week: 7 };
 const VIEWS = ['year', 'month', 'week', 'day'];
 const STORAGE_KEY = 'yjtj_tasks_v2';
